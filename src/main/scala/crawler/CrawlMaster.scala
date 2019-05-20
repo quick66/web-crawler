@@ -1,21 +1,14 @@
 package crawler
 
-import akka.actor.{Actor, ActorLogging, OneForOneStrategy, Props, SupervisorStrategy}
-import akka.routing.RoundRobinPool
+import akka.actor.{Actor, ActorLogging}
 
 import scala.concurrent.duration._
 
-class CrawlMaster extends Actor with ActorLogging {
+class CrawlMaster (workerFactory: WorkerFactory)
+    extends Actor
+    with ActorLogging {
 
-    private val routerSupervision = OneForOneStrategy() {
-        case e =>
-            self ! e
-            SupervisorStrategy.Restart
-    }
-
-    private val workers = context.actorOf(
-        RoundRobinPool(8).withSupervisorStrategy(routerSupervision).props(Props[CrawlWorker])
-    )
+    private val workers = workerFactory.createPool
 
     override def preStart(): Unit = {
         import context.dispatcher
@@ -40,7 +33,7 @@ class CrawlMaster extends Actor with ActorLogging {
 
             context.become(withState(state.enqueue(url)))
 
-        case Parsed(url, urls) =>
+        case Extracted(url, urls) =>
             log.debug(s"Parsed $url")
 
             context.become(withState(state.complete(url, urls)))
@@ -65,9 +58,6 @@ class CrawlMaster extends Actor with ActorLogging {
 
             context.become(withState(state.resume))
 
-        case e: Throwable =>
-            log.warning(s"Received throwable $e")
-
     }
 
     private def processNextUrl(state: CrawlMasterState): Unit = {
@@ -87,34 +77,5 @@ class CrawlMaster extends Actor with ActorLogging {
             log.info("Received NextUrl while paused")
         }
     }
-
-}
-
-case class CrawlMasterState(paused: Boolean = false,
-                            queue: Seq[String] = Seq.empty,
-                            processed: Set[String] = Set.empty,
-                            errors: Seq[String] = Seq.empty,
-                            allowedDomains: Set[String] = Set.empty) {
-
-    def status: CrawlingStatus = CrawlingStatus(paused, queue.size, processed.size)
-
-    def setAllowedDomains(domains: Seq[String]): CrawlMasterState = copy(allowedDomains = domains.toSet)
-
-    def listAllowedDomains: AllowedDomains = AllowedDomains(allowedDomains)
-
-    def pause: CrawlMasterState = copy(paused = true)
-
-    def resume: CrawlMasterState = copy(paused = false)
-
-    private def skipProcessed(urls: Seq[String]) = urls.filterNot(processed.contains)
-
-    def enqueue(url: String): CrawlMasterState = copy(queue = skipProcessed(queue :+ url))
-
-    def dequeue: (String, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
-
-    def complete(url: String, parsedUrls: Seq[String]): CrawlMasterState = copy(
-        processed = processed + url,
-        queue = skipProcessed(queue ++ parsedUrls)
-    )
 
 }
