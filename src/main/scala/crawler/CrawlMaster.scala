@@ -1,8 +1,10 @@
 package crawler
 
 import akka.actor.{Actor, ActorLogging}
+import crawler.logic.filter.{AllowedDomainsFilter, AllowedProtocolsFilter, UrlFilterChain}
 
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 class CrawlMaster (workerFactory: WorkerFactory)
     extends Actor
@@ -10,10 +12,7 @@ class CrawlMaster (workerFactory: WorkerFactory)
 
     private val workers = workerFactory.createPool
 
-    override def preStart(): Unit = {
-        import context.dispatcher
-        context.system.scheduler.schedule(Duration.Zero, 100 milliseconds, self, NextUrl)
-    }
+    override def preStart(): Unit = scheduleNextUrl()
 
     override def receive: Receive = withState(CrawlMasterState())
 
@@ -36,7 +35,13 @@ class CrawlMaster (workerFactory: WorkerFactory)
         case Extracted(url, urls) =>
             log.debug(s"Parsed $url")
 
-            context.become(withState(state.complete(url, urls)))
+            val filter = UrlFilterChain(
+                AllowedDomainsFilter(state.allowedDomains),
+                //TODO move to config
+                AllowedProtocolsFilter("http", "https")
+            )
+
+            context.become(withState(state.complete(url, filter(urls))))
 
         case NextUrl =>
             processNextUrl(state)
@@ -57,11 +62,16 @@ class CrawlMaster (workerFactory: WorkerFactory)
             log.info("Crawling resumed")
 
             context.become(withState(state.resume))
+            scheduleNextUrl()
 
     }
 
+    private def scheduleNextUrl(): Unit = {
+        import context.dispatcher
+        context.system.scheduler.scheduleOnce(100 milliseconds, self, NextUrl)
+    }
+
     private def processNextUrl(state: CrawlMasterState): Unit = {
-        //TODO cancel timer when paused
         if (!state.paused) {
             if (state.queue.nonEmpty) {
                 val (url, newState) = state.dequeue
@@ -73,8 +83,10 @@ class CrawlMaster (workerFactory: WorkerFactory)
             } else {
                 log.debug("Received NextUrl while queue is empty")
             }
+
+            scheduleNextUrl()
         } else {
-            log.info("Received NextUrl while paused")
+            log.warning("Received NextUrl while paused")
         }
     }
 

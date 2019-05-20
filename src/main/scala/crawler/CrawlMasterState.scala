@@ -1,9 +1,10 @@
 package crawler
 
+import java.net.URL
+
 case class CrawlMasterState(paused: Boolean = false,
-                            queue: Seq[String] = Seq.empty,
-                            processed: Set[String] = Set.empty,
-                            errors: Seq[String] = Seq.empty,
+                            queue: Seq[URL] = Seq.empty,
+                            processed: Set[URL] = Set.empty,
                             allowedDomains: Set[String] = Set.empty) {
 
     def status: CrawlingStatus = CrawlingStatus(paused, queue.size, processed.size)
@@ -16,13 +17,13 @@ case class CrawlMasterState(paused: Boolean = false,
 
     def resume: CrawlMasterState = copy(paused = false)
 
-    private def skipProcessed(urls: Seq[String]) = urls.filterNot(processed.contains)
+    private def skipProcessed(urls: Seq[URL]) = urls.filterNot(processed.contains)
 
-    def enqueue(url: String): CrawlMasterState = copy(queue = skipProcessed(queue :+ url))
+    def enqueue(url: URL): CrawlMasterState = copy(queue = skipProcessed(queue :+ url))
 
-    def dequeue: (String, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
+    def dequeue: (URL, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
 
-    def complete(url: String, parsedUrls: Seq[String]): CrawlMasterState = copy(
+    def complete(url: URL, parsedUrls: Seq[URL]): CrawlMasterState = copy(
         processed = processed + url,
         queue = skipProcessed(queue ++ parsedUrls)
     )

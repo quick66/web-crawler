@@ -1,24 +1,23 @@
 package crawler.logic.extractor
 
-import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, Materializer}
-import crawler.logic.Document
-import javax.inject.Singleton
+import java.net.URL
 
-import scala.concurrent.Future
+import akka.stream.Materializer
+import crawler.logic.Document
+import javax.inject.{Inject, Singleton}
+
+import scala.concurrent.{ExecutionContext, Future}
 
 //TODO недоделан
 @Singleton
-class ComplexUrlExtractor(implicit system: ActorSystem) extends UrlExtractor {
+class ScanningUrlExtractor @Inject()(implicit materializer: Materializer) extends UrlExtractor {
 
-    private implicit val mat: Materializer = ActorMaterializer()
-
-    override def extract(document: Document): Future[Seq[String]] = document match {
+    override def extract(document: Document)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
         case Document.Strict(_, content) =>
             //TODO async or blocking?
             Future.successful(parseChunk(ParseResult(), content).found)
         case Document.Streamed(_, contentStream) =>
-            contentStream.runFold(ParseResult())(parseChunk).map(_.found)(mat.executionContext)
+            contentStream.runFold(ParseResult())(parseChunk).map(_.found)
     }
 
     def parseChunk(parseResult: ParseResult, chunk: String): ParseResult = {
@@ -59,6 +58,6 @@ object HrefAttr {
     def initial = HrefAttr("href".toCharArray)
 }
 
-case class ParseResult(found: Seq[String] = Seq.empty, state: ParserState = ATagOpen.initial)
+case class ParseResult(found: Seq[URL] = Seq.empty, state: ParserState = ATagOpen.initial)
 
 

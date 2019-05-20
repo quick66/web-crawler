@@ -6,14 +6,13 @@ import akka.http.scaladsl.{Http, HttpExt}
 import akka.stream.{ActorMaterializer, Materializer}
 import com.google.inject.Provides
 import com.typesafe.config.{Config, ConfigFactory}
+import crawler.logic.downloader.{DocumentDownloader, JsoupDownloader}
+import crawler.logic.extractor.{JsoupUrlExtractor, UrlExtractor}
 import crawler.{CrawlMaster, WorkerFactory}
 import javax.inject.{Named, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 
 class AppModule extends ScalaModule {
-
-    override def configure(): Unit = {
-    }
 
     @Provides @Singleton
     def appConfig(): Config = ConfigFactory.load()
@@ -31,7 +30,10 @@ class AppModule extends ScalaModule {
     def crawlMaster(system: ActorSystem,
                     workerFactory: WorkerFactory): ActorRef = system.actorOf(Props(new CrawlMaster(workerFactory)))
 
-    @Provides @Singleton
-    def jsonStreamingSupport(): JsonEntityStreamingSupport = EntityStreamingSupport.json()
+    override def configure(): Unit = {
+        bind[UrlExtractor].to[JsoupUrlExtractor]
+        bind[DocumentDownloader].to[JsoupDownloader]
+        bind[JsonEntityStreamingSupport].toInstance(EntityStreamingSupport.json())
+    }
 
 }

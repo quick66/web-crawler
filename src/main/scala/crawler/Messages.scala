@@ -1,9 +1,11 @@
 package crawler
 
+import java.net.URL
+
 // Commands for master
 case class SetAllowedDomains(domains: Seq[String])
 case object ListAllowedDomains
-case class AddUrl(url: String)
+case class AddUrl(url: URL)
 case object GetCrawlStatus
 case object PauseCrawling
 case object ResumeCrawling
@@ -14,4 +16,4 @@ case class CrawlingStatus(paused: Boolean, enqueued: Int, processed: Int)
 case class AllowedDomains(domains: Set[String])
 
 // Replies from worker
-case class Extracted(from: String, urls: Seq[String])
+case class Extracted(from: URL, urls: Seq[URL])

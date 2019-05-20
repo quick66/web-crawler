@@ -1,5 +1,7 @@
 package crawler.logic
 
+import java.net.URL
+
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 
@@ -8,7 +10,7 @@ import scala.concurrent.duration.FiniteDuration
 
 trait Document {
 
-    def uri: String
+    def url: URL
 
     def contentStream: Source[String, Any]
 
@@ -25,10 +27,10 @@ trait Document {
 
 object Document {
 
-    case class Strict(uri: String, content: String) extends Document {
+    case class Strict(url: URL, content: String) extends Document {
         override def contentStream: Source[String, Any] = Source.single(content)
     }
 
-    case class Streamed(uri: String, contentStream: Source[String, Any]) extends Document
+    case class Streamed(url: URL, contentStream: Source[String, Any]) extends Document
 
 }

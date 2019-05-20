@@ -1,34 +1,42 @@
 package crawler.logic.extractor
 
-import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, Materializer}
+import java.net.URL
+
+import akka.stream.Materializer
 import crawler.logic.Document
+import javax.inject.{Inject, Singleton}
 import org.jsoup.Jsoup
+import org.jsoup.internal.StringUtil
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
-class JsoupUrlExtractor(implicit system: ActorSystem) extends UrlExtractor {
+@Singleton
+class JsoupUrlExtractor @Inject()(implicit materializer: Materializer) extends UrlExtractor {
 
-    import system.dispatcher
-    private implicit val mat: Materializer = ActorMaterializer()
+    override def extract(document: Document)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
+        case Document.Strict(url, content) =>
+            extract(url, content)
 
-    override def extract(document: Document): Future[Seq[String]] = document match {
-        case Document.Strict(uri, content) =>
-            //TODO async or blocking?
-            Future.successful(extract(uri, content))
-
-        case Document.Streamed(uri, contentStream) =>
-            contentStream.runFold(StringBuilder.newBuilder)(_ append _).map(sb => extract(uri, sb.toString()))
+        case Document.Streamed(url, contentStream) =>
+            contentStream.runFold(StringBuilder.newBuilder)(_ append _).flatMap(sb => extract(url, sb.toString()))
     }
 
-    private def extract(uri: String, content: String) = {
-        Jsoup.parse(content, uri)
-            .getElementsByTag("a")
-            .iterator().asScala
-            .map(_.absUrl("href"))
-            .filter(_.nonEmpty)
-            .toSeq
+    //TODO async or blocking?
+    private def extract(url: URL, content: String): Future[Seq[URL]] = {
+        val tryExtract = Try {
+            Jsoup.parse(content)
+                .getElementsByTag("a")
+                .iterator().asScala
+                .flatMap { el =>
+                    val href = el.attr("href")
+                    (Try(new URL(href)) orElse Try(StringUtil.resolve(url, href))).toOption
+                }
+                .toSeq
+        }
+
+        Future.fromTry(tryExtract)
     }
 
 }
