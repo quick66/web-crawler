@@ -37,7 +37,6 @@ class CrawlMaster (workerFactory: WorkerFactory)
 
             val filter = UrlFilterChain(
                 AllowedDomainsFilter(state.allowedDomains),
-                //TODO move to config
                 AllowedProtocolsFilter("http", "https")
             )
 

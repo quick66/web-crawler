@@ -6,8 +6,9 @@ import akka.http.scaladsl.{Http, HttpExt}
 import akka.stream.{ActorMaterializer, Materializer}
 import com.google.inject.Provides
 import com.typesafe.config.{Config, ConfigFactory}
-import crawler.logic.downloader.{DocumentDownloader, JsoupDownloader}
-import crawler.logic.extractor.{JsoupUrlExtractor, UrlExtractor}
+import crawler.logic.download.{DocumentDownloader, JsoupDownloader}
+import crawler.logic.extract.{JsoupUrlExtractor, UrlExtractor}
+import crawler.logic.storage.{SimpleFileSystemStorage, Storage}
 import crawler.{CrawlMaster, WorkerFactory}
 import javax.inject.{Named, Singleton}
 import net.codingwell.scalaguice.ScalaModule
@@ -33,6 +34,7 @@ class AppModule extends ScalaModule {
     override def configure(): Unit = {
         bind[UrlExtractor].to[JsoupUrlExtractor]
         bind[DocumentDownloader].to[JsoupDownloader]
+        bind[Storage].to[SimpleFileSystemStorage]
         bind[JsonEntityStreamingSupport].toInstance(EntityStreamingSupport.json())
     }
 

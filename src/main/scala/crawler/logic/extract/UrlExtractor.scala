@@ -1,4 +1,4 @@
-package crawler.logic.extractor
+package crawler.logic.extract
 
 import java.net.URL
 

@@ -1,8 +1,9 @@
-package crawler.logic.extractor
+package crawler.logic.extract
 
 import java.net.URL
 
 import akka.stream.Materializer
+import akka.util.ByteString
 import crawler.logic.Document
 import javax.inject.{Inject, Singleton}
 
@@ -13,16 +14,16 @@ import scala.concurrent.{ExecutionContext, Future}
 class ScanningUrlExtractor @Inject()(implicit materializer: Materializer) extends UrlExtractor {
 
     override def extract(document: Document)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
-        case Document.Strict(_, content) =>
+        case Document.Strict(_, _, _, content) =>
             //TODO async or blocking?
             Future.successful(parseChunk(ParseResult(), content).found)
-        case Document.Streamed(_, contentStream) =>
+        case Document.Streamed(_, _, _, contentStream) =>
             contentStream.runFold(ParseResult())(parseChunk).map(_.found)
     }
 
-    def parseChunk(parseResult: ParseResult, chunk: String): ParseResult = {
+    def parseChunk(parseResult: ParseResult, chunk: ByteString): ParseResult = {
 
-        def matchPrefix(str: String, prefix: Array[Char]): Int = {
+        def matchPrefix(str: ByteString, prefix: Array[Char]): Int = {
             (str zip prefix).reverse.dropWhile(p => p._1 == p._2).size
         }
 

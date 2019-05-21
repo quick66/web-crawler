@@ -1,8 +1,9 @@
-package crawler.logic.extractor
+package crawler.logic.extract
 
 import java.net.URL
 
 import akka.stream.Materializer
+import akka.util.ByteStringBuilder
 import crawler.logic.Document
 import javax.inject.{Inject, Singleton}
 import org.jsoup.Jsoup
@@ -16,11 +17,13 @@ import scala.util.Try
 class JsoupUrlExtractor @Inject()(implicit materializer: Materializer) extends UrlExtractor {
 
     override def extract(document: Document)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
-        case Document.Strict(url, content) =>
-            extract(url, content)
+        case Document.Strict(url, _, charset, content) =>
+            extract(url, content.decodeString(charset.nioCharset()))
 
-        case Document.Streamed(url, contentStream) =>
-            contentStream.runFold(StringBuilder.newBuilder)(_ append _).flatMap(sb => extract(url, sb.toString()))
+        case Document.Streamed(url, _, charset, contentStream) =>
+            contentStream
+                .runFold(new ByteStringBuilder())(_ append _)
+                .flatMap(sb => extract(url, sb.result().decodeString(charset.nioCharset())))
     }
 
     //TODO async or blocking?

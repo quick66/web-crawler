@@ -4,11 +4,14 @@ import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, OneForOneStrateg
 import akka.event.Logging
 import akka.pattern.pipe
 import akka.routing.RoundRobinPool
-import crawler.logic.downloader.DocumentDownloader
-import crawler.logic.extractor.UrlExtractor
+import crawler.logic.download.DocumentDownloader
+import crawler.logic.extract.UrlExtractor
+import crawler.logic.storage.Storage
 import javax.inject.{Inject, Singleton}
 
+//TODO разделить воркеры на скачивалки, сохранялки и экстракторы
 class CrawlWorker(downloader: DocumentDownloader,
+                  storage: Storage,
                   extractor: UrlExtractor)
     extends Actor
     with ActorLogging {
@@ -18,16 +21,25 @@ class CrawlWorker(downloader: DocumentDownloader,
     override def receive: Receive = {
         case AddUrl(url) =>
             log.debug(s"Worker crawling $url")
-            //TODO сохранение документов
-            (downloader.getContent _ andThen extractor.extract)(url)
-                .map(urls => Extracted(url, urls))
-                .pipeTo(sender())
+
+            downloader.getContent(url).foreach { document =>
+
+                storage.save(document).foreach { storageId =>
+                    log.info(s"Document $url saved in $storageId")
+                }
+
+                extractor
+                    .extract(document)
+                    .map(urls => Extracted(url, urls))
+                    .pipeTo(sender())
+            }
     }
 
 }
 
 @Singleton
 class WorkerFactory @Inject()(downloader: DocumentDownloader,
+                              storage: Storage,
                               extractor: UrlExtractor) {
 
     def createPool(implicit context: ActorContext): ActorRef = {
@@ -43,7 +55,7 @@ class WorkerFactory @Inject()(downloader: DocumentDownloader,
 
         val pool = RoundRobinPool(8)
             .withSupervisorStrategy(supervisorStrategy)
-            .props(Props(new CrawlWorker(downloader, extractor)))
+            .props(Props(new CrawlWorker(downloader, storage, extractor)))
 
         context.actorOf(pool)
     }
