@@ -22,6 +22,8 @@ class CrawlWorker(downloader: DocumentDownloader,
         case AddUrl(url) =>
             log.debug(s"Worker crawling $url")
 
+            val master = sender()
+
             downloader.getContent(url).foreach { document =>
 
                 storage.save(document).foreach { storageId =>
@@ -31,7 +33,7 @@ class CrawlWorker(downloader: DocumentDownloader,
                 extractor
                     .extract(document)
                     .map(urls => Extracted(url, urls))
-                    .pipeTo(sender())
+                    .pipeTo(master)
             }
     }
 

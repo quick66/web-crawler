@@ -30,7 +30,6 @@ class SimpleFileSystemStorage @Inject()(config: Config)
     override def save(document: Document)(implicit ec: ExecutionContext): Future[String] = {
         val path = resolvePath
         document.contentStream
-            .map(ByteString.apply)
             .runWith(FileIO.toPath(path, fileIOOptions))
             .map { r => if (r.wasSuccessful) path.toString else throw r.getError }
     }
