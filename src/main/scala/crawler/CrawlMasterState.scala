@@ -17,15 +17,18 @@ case class CrawlMasterState(paused: Boolean = false,
 
     def resume: CrawlMasterState = copy(paused = false)
 
-    def enqueue(url: URL): CrawlMasterState = if (processed.contains(url)) this else copy(queue = queue :+ url)
+    def enqueue(url: URL): CrawlMasterState = copy(queue = queue :+ url)
 
-    def dequeueUrl: (URL, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
-
-    def complete(url: URL, parsedUrls: Seq[URL]): CrawlMasterState = {
-        val newProcessed = processed + url
-        val forEnqueue = parsedUrls.filterNot(newProcessed.contains)
-
-        copy(processed = newProcessed, queue = queue ++ forEnqueue)
+    def dequeueUrl: (Option[URL], CrawlMasterState) = {
+        val cleaned = queue.dropWhile(processed.contains)
+        cleaned match {
+            case head +: tail =>
+                (Some(head), copy(queue = tail))
+            case _ =>
+                (None, copy(queue = Seq.empty))
+        }
     }
+
+    def complete(url: URL, extracted: Seq[URL]): CrawlMasterState = copy(processed = processed + url, queue = queue ++ extracted)
 
 }

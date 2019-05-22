@@ -23,19 +23,21 @@ class CrawlMaster(workerFactory: WorkerFactory,
     private def withState(state: CrawlMasterState): Receive = {
 
         case SetAllowedDomains(domains) =>
-            log.debug(s"Allow domains $domains")
+            log.info(s"Allow domains $domains")
 
             context.become(withState(state.setAllowedDomains(domains)))
 
         case ListAllowedDomains =>
-            log.debug(s"Domains ${state.allowedDomains} allowed")
+            log.info(s"Domains ${state.allowedDomains} allowed")
 
             sender() ! state.listAllowedDomains
 
         case AddUrl(url) =>
-            log.debug(s"Enqueued $url")
+            log.info(s"Enqueued starting document $url")
 
-            context.become(withState(state.enqueue(url)))
+            if (!state.processed.contains(url)) {
+                context.become(withState(state.enqueue(url)))
+            }
 
         case GetCrawlStatus =>
             val status = state.status
@@ -69,21 +71,22 @@ class CrawlMaster(workerFactory: WorkerFactory,
 
     private def dequeueNextUrl(state: CrawlMasterState): Unit = {
         if (!state.paused) {
-            if (state.queue.nonEmpty) {
-                val (url, newState) = state.dequeueUrl
-                val filter = UrlFilterChain(
-                    AllowedDomainsFilter(state.allowedDomains),
-                    NotSameUrlFilter(state.processed),
-                    AllowedProtocolsFilter("http", "https")
-                )
+            val (urlOpt, newState) = state.dequeueUrl
+            context.become(withState(newState))
+            urlOpt match {
+                case Some(url) =>
+                    log.debug(s"Crawling document $url")
 
-                log.debug(s"Crawling $url")
+                    val filter = UrlFilterChain(
+                        AllowedDomainsFilter(state.allowedDomains),
+                        NotSameUrlFilter(state.processed),
+                        AllowedProtocolsFilter("http", "https")
+                    )
 
-                context.become(withState(newState))
-                workers ! ProcessUrl(url, filter)
+                    workers ! ProcessUrl(url, filter)
 
-            } else {
-                log.debug("Received NextUrl while queue is empty")
+                case None =>
+                    log.debug("Received NextUrl while queue is empty")
             }
         } else {
             log.debug("Received NextUrl while paused")
