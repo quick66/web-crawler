@@ -1,11 +1,9 @@
 package server
 
 import akka.actor.{ActorRef, ActorSystem}
-import akka.http.scaladsl.common.JsonEntityStreamingSupport
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.pattern.ask
-import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import com.typesafe.config.Config
 import crawler._
@@ -14,10 +12,8 @@ import server.AppJsonProtocol._
 import util.DirectivesExtension
 
 @Singleton
-class Router @Inject()(@Named("crawl-master") master: ActorRef,
-                       config: Config)
-                      (implicit system: ActorSystem,
-                       jsonStreaming: JsonEntityStreamingSupport)
+class Router @Inject()(@Named("crawl-master") master: ActorRef, config: Config)
+                      (implicit system: ActorSystem)
     extends Directives
     with SprayJsonSupport
     with DirectivesExtension {
@@ -27,7 +23,7 @@ class Router @Inject()(@Named("crawl-master") master: ActorRef,
     def routes: Route = {
         path("status") {
             get {
-                complete(Source.fromFuture((master ? GetCrawlStatus).mapTo[CrawlingStatus]))
+                complete((master ? GetCrawlStatus).mapTo[CrawlingStatus])
             }
         } ~ path("page") {
             post {
@@ -38,7 +34,7 @@ class Router @Inject()(@Named("crawl-master") master: ActorRef,
             }
         } ~ path("domains") {
             get {
-                complete(Source.fromFuture((master ? ListAllowedDomains).mapTo[AllowedDomains]))
+                complete((master ? ListAllowedDomains).mapTo[AllowedDomains])
             } ~ post {
                 entity(as[SetAllowedDomains]) { setAllowedDomains =>
                     master ! setAllowedDomains
