@@ -2,30 +2,27 @@ package server
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.common.JsonEntityStreamingSupport
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.server.{Directives, Route}
 import akka.pattern.ask
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import com.typesafe.config.Config
-import crawler.{AddUrl, AllowedDomains, CrawlingStatus, GetCrawlStatus, ListAllowedDomains, PauseCrawling, ResumeCrawling, SetAllowedDomains}
+import crawler._
 import javax.inject.{Inject, Named, Singleton}
 import server.AppJsonProtocol._
-import spray.json._
-
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import util.DirectivesExtension
 
 @Singleton
-class Router @Inject()(@Named("crawl-master") master: ActorRef, config: Config)
-                      (implicit system: ActorSystem, jsonStreaming: JsonEntityStreamingSupport) {
+class Router @Inject()(@Named("crawl-master") master: ActorRef,
+                       config: Config)
+                      (implicit system: ActorSystem,
+                       jsonStreaming: JsonEntityStreamingSupport)
+    extends Directives
+    with SprayJsonSupport
+    with DirectivesExtension {
 
-    //TODO в конфиг
-    private implicit val defaultTimeout: Timeout = Timeout(5 seconds)
-
-    //TODO в хелпер
-    private val ok = JsObject("ok" -> JsTrue)
+    private implicit val defaultTimeout: Timeout = Timeout.create(config.getDuration("app.request-state-timeout"))
 
     def routes: Route = {
         path("status") {
@@ -36,7 +33,7 @@ class Router @Inject()(@Named("crawl-master") master: ActorRef, config: Config)
             post {
                 entity(as[AddUrl]) { addUrl =>
                     master ! addUrl
-                    complete(ok)
+                    completeWithJsonOk
                 }
             }
         } ~ path("domains") {
@@ -45,18 +42,18 @@ class Router @Inject()(@Named("crawl-master") master: ActorRef, config: Config)
             } ~ post {
                 entity(as[SetAllowedDomains]) { setAllowedDomains =>
                     master ! setAllowedDomains
-                    complete(ok)
+                    completeWithJsonOk
                 }
             }
         } ~ path("pause") {
             post {
                 master ! PauseCrawling
-                complete(ok)
+                completeWithJsonOk
             }
         } ~ path("resume") {
             post {
                 master ! ResumeCrawling
-                complete(ok)
+                completeWithJsonOk
             }
         }
     }

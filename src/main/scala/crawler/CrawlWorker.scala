@@ -1,27 +1,71 @@
 package crawler
 
-import akka.actor.{Actor, ActorLogging}
-import org.jsoup.Jsoup
+import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, OneForOneStrategy, Props, SupervisorStrategy}
+import akka.event.Logging
+import akka.pattern.pipe
+import akka.routing.RoundRobinPool
+import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.{ActorMaterializer, Materializer}
+import crawler.logic.download.DocumentDownloader
+import crawler.logic.extract.UrlExtractor
+import crawler.logic.storage.Storage
+import javax.inject.{Inject, Singleton}
 
-import scala.collection.JavaConverters._
+class CrawlWorker(downloader: DocumentDownloader,
+                  storage: Storage,
+                  extractor: UrlExtractor)
+    extends Actor
+    with ActorLogging {
 
-class CrawlWorker extends Actor with ActorLogging {
+    import context.dispatcher
+
+    private implicit val m: Materializer = ActorMaterializer()
 
     override def receive: Receive = {
-        case AddUrl(url) =>
-            log.debug(s"Worker crawling $url")
-            //TODO разделить загрузку и парсинг (и сохранение документов)
-            val parsed = Jsoup
-                .connect(url).get()
-                .getElementsByTag("a")
-                .iterator().asScala
-                .map(_.absUrl("href"))
-                .filter(_.nonEmpty)
-                .toSeq
+        case ProcessUrl(url, urlFilter) =>
+            val master = sender()
 
-            log.debug(s"Worker parsed $url")
+            downloader.getContent(url).foreach { document =>
+                val store = storage.save(document)
+                    .mapMaterializedValue { storageId =>
+                        storageId.map(DocumentSaved(document, _)) pipeTo master
+                    }
 
-            sender() ! Parsed(url, parsed)
+                val extract = extractor.extract(document, urlFilter)
+                    .mapMaterializedValue { urls =>
+                        urls.map(UrlsExtracted(document, _)) pipeTo master
+                    }
+
+                document.contentStream
+                    .alsoToMat(store)(Keep.none)
+                    .alsoToMat(extract)(Keep.none)
+                    .runWith(Sink.ignore)
+            }
+    }
+
+}
+
+@Singleton
+class WorkerFactory @Inject()(downloader: DocumentDownloader,
+                              storage: Storage,
+                              extractor: UrlExtractor) {
+
+    def createPool(implicit context: ActorContext): ActorRef = {
+        val log = Logging(context.system, "CrawlWorkerExceptions")
+
+        val supervisorStrategy = {
+            OneForOneStrategy() {
+                case e =>
+                    log.error(s"Exception in worker", e)
+                    SupervisorStrategy.Restart
+            }
+        }
+
+        val pool = RoundRobinPool(8)
+            .withSupervisorStrategy(supervisorStrategy)
+            .props(Props(new CrawlWorker(downloader, storage, extractor)))
+
+        context.actorOf(pool)
     }
 
 }

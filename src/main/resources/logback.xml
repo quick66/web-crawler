@@ -3,7 +3,7 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%date  %-10level{5} %-25logger{15} %X{akkaSource} %X{sourceThread} %-100message %n%xException{10}</pattern>
+            <pattern>%date  %-10level{5} %-25logger{15} %X{akkaSource} %-100message %n%xException{10}</pattern>
         </encoder>
     </appender>
 
@@ -18,13 +18,16 @@
             <maxHistory>7</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%date  %-10level{5} %-25logger{15} %X{akkaSource} %X{sourceThread} %-100message %n%xException{10}</pattern>
+            <pattern>%date  %-10level{5} %-25logger{15} %X{akkaSource} %-100message %n%xException{10}</pattern>
         </encoder>
     </appender>
 
     <appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="FILE" />
     </appender>
+
+    <logger name="crawler.logic.download.JsoupDownloader" level="INFO" />
+    <logger name="crawler.logic.storage.SimpleFileSystemStorage" level="INFO" />
 
     <root level="DEBUG">
         <appender-ref ref="ASYNCFILE"/>

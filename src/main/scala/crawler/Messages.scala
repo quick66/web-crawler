@@ -1,16 +1,26 @@
 package crawler
 
-case class AddUrl(url: String)
+import java.net.URL
+
+import crawler.logic.Document
+import crawler.logic.extract.filter.UrlFilter
+
+// Commands for master
+case class SetAllowedDomains(domains: Seq[String])
+case object ListAllowedDomains
+case class AddUrl(url: URL)
 case object GetCrawlStatus
 case object PauseCrawling
 case object ResumeCrawling
-case object NextUrl
+case object DequeueNextUrl
 
+// Replies from master
 case class CrawlingStatus(paused: Boolean, enqueued: Int, processed: Int)
-
-case class Parsed(from: String, urls: Seq[String])
-
-case class SetAllowedDomains(domains: Seq[String])
-case object ListAllowedDomains
-
 case class AllowedDomains(domains: Set[String])
+
+// Commands for worker
+case class ProcessUrl(url: URL, urlFilter: UrlFilter)
+
+// Replies from worker
+case class DocumentSaved(document: Document, strorageId: String)
+case class UrlsExtracted(document: Document, urls: Seq[URL])
