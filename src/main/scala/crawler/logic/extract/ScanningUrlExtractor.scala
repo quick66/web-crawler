@@ -5,6 +5,7 @@ import java.net.URL
 import akka.stream.Materializer
 import akka.util.ByteString
 import crawler.logic.Document
+import crawler.logic.extract.filter.UrlFilter
 import javax.inject.{Inject, Singleton}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -13,9 +14,8 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class ScanningUrlExtractor @Inject()(implicit materializer: Materializer) extends UrlExtractor {
 
-    override def extract(document: Document)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
+    override def extract(document: Document, urlFilter: UrlFilter)(implicit ec: ExecutionContext): Future[Seq[URL]] = document match {
         case Document.Strict(_, _, _, content) =>
-            //TODO async or blocking?
             Future.successful(parseChunk(ParseResult(), content).found)
         case Document.Streamed(_, _, _, contentStream) =>
             contentStream.runFold(ParseResult())(parseChunk).map(_.found)

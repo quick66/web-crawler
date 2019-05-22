@@ -1,7 +1,7 @@
 package crawler
 
 import akka.actor.{Actor, ActorLogging}
-import crawler.logic.filter.{AllowedDomainsFilter, AllowedProtocolsFilter, UrlFilterChain}
+import crawler.logic.extract.filter.{AllowedDomainsFilter, AllowedProtocolsFilter, UrlFilterChain}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -12,11 +12,10 @@ class CrawlMaster (workerFactory: WorkerFactory)
 
     private val workers = workerFactory.createPool
 
-    override def preStart(): Unit = scheduleNextUrl()
-
     override def receive: Receive = withState(CrawlMasterState())
 
     private def withState(state: CrawlMasterState): Receive = {
+
         case SetAllowedDomains(domains) =>
             log.debug(s"Allow domains $domains")
 
@@ -31,19 +30,7 @@ class CrawlMaster (workerFactory: WorkerFactory)
             log.debug(s"Enqueued $url")
 
             context.become(withState(state.enqueue(url)))
-
-        case Extracted(url, urls) =>
-            log.debug(s"Parsed $url")
-
-            val filter = UrlFilterChain(
-                AllowedDomainsFilter(state.allowedDomains),
-                AllowedProtocolsFilter("http", "https")
-            )
-
-            context.become(withState(state.complete(url, filter(urls))))
-
-        case NextUrl =>
-            processNextUrl(state)
+            dequeueNextUrl(state) //подпинывает очередь
 
         case GetCrawlStatus =>
             val status = state.status
@@ -61,24 +48,47 @@ class CrawlMaster (workerFactory: WorkerFactory)
             log.info("Crawling resumed")
 
             context.become(withState(state.resume))
-            scheduleNextUrl()
+            dequeueNextUrl(state)
+
+        case DequeueNextUrl =>
+            dequeueNextUrl(state)
+
+        case DocumentDownloaded(document) =>
+            log.debug(s"Got document ${document.url}")
+
+            val filter = UrlFilterChain(
+                AllowedDomainsFilter(state.allowedDomains),
+                AllowedProtocolsFilter("http", "https")
+            )
+
+            workers ! SaveDocument(document)
+            workers ! ExtractUrls(document, filter)
+
+        case DocumentSaved(document, storageId) =>
+            log.debug(s"Document ${document.url} saved in $storageId")
+
+        case UrlsExtracted(document, urls) =>
+            log.debug(s"Extracted ${urls.size} urls from document ${document.url}")
+
+            context.become(withState(state.complete(document.url, urls)))
 
     }
 
     private def scheduleNextUrl(): Unit = {
         import context.dispatcher
-        context.system.scheduler.scheduleOnce(100 milliseconds, self, NextUrl)
+        //TODO from config
+        context.system.scheduler.scheduleOnce(100 milliseconds, self, DequeueNextUrl)
     }
 
-    private def processNextUrl(state: CrawlMasterState): Unit = {
+    private def dequeueNextUrl(state: CrawlMasterState): Unit = {
         if (!state.paused) {
             if (state.queue.nonEmpty) {
-                val (url, newState) = state.dequeue
+                val (url, newState) = state.dequeueUrl
 
                 log.debug(s"Crawling $url")
 
                 context.become(withState(newState))
-                workers ! AddUrl(url)
+                workers ! DownloadDocument(url)
             } else {
                 log.debug("Received NextUrl while queue is empty")
             }

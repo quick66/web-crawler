@@ -9,7 +9,6 @@ import crawler.logic.extract.UrlExtractor
 import crawler.logic.storage.Storage
 import javax.inject.{Inject, Singleton}
 
-//TODO разделить воркеры на скачивалки, сохранялки и экстракторы
 class CrawlWorker(downloader: DocumentDownloader,
                   storage: Storage,
                   extractor: UrlExtractor)
@@ -19,22 +18,39 @@ class CrawlWorker(downloader: DocumentDownloader,
     import context.dispatcher
 
     override def receive: Receive = {
-        case AddUrl(url) =>
-            log.debug(s"Worker crawling $url")
+        case DownloadDocument(url) =>
+            log.debug(s"Downloading document $url")
 
-            val master = sender()
+            downloader.getContent(url)
+                .map { document =>
+                    log.info(s"Got document ${document.url}")
 
-            downloader.getContent(url).foreach { document =>
-
-                storage.save(document).foreach { storageId =>
-                    log.info(s"Document $url saved in $storageId")
+                    DocumentDownloaded(document)
                 }
+                .pipeTo(sender())
 
-                extractor
-                    .extract(document)
-                    .map(urls => Extracted(url, urls))
-                    .pipeTo(master)
-            }
+        case SaveDocument(document) =>
+            log.debug(s"Saving document ${document.url}")
+
+            storage.save(document)
+                .map { storageId =>
+                    log.info(s"Document ${document.url} saved in $storageId")
+
+                    DocumentSaved(document, storageId)
+                }
+                .pipeTo(sender())
+
+        case ExtractUrls(document, urlFilter) =>
+            log.debug(s"Extracting links from document ${document.url}")
+
+            extractor
+                .extract(document, urlFilter)
+                .map { urls =>
+                    log.info(s"Extracted ${urls.size} urls from document ${document.url}")
+
+                    UrlsExtracted(document, urls)
+                }
+                .pipeTo(sender())
     }
 
 }
@@ -55,6 +71,7 @@ class WorkerFactory @Inject()(downloader: DocumentDownloader,
             }
         }
 
+        //TODO from config
         val pool = RoundRobinPool(8)
             .withSupervisorStrategy(supervisorStrategy)
             .props(Props(new CrawlWorker(downloader, storage, extractor)))

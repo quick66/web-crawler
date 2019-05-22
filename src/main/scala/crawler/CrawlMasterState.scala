@@ -21,7 +21,7 @@ case class CrawlMasterState(paused: Boolean = false,
 
     def enqueue(url: URL): CrawlMasterState = copy(queue = skipProcessed(queue :+ url))
 
-    def dequeue: (URL, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
+    def dequeueUrl: (URL, CrawlMasterState) = (queue.head, copy(queue = queue.tail))
 
     def complete(url: URL, parsedUrls: Seq[URL]): CrawlMasterState = copy(
         processed = processed + url,

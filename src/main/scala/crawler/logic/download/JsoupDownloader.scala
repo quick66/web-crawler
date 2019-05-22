@@ -25,6 +25,8 @@ class JsoupDownloader extends DocumentDownloader {
                 val charset = contentType.charsetOption.getOrElse(HttpCharsets.`UTF-8`)
                 val body = ByteString(response.bodyAsBytes())
 
+                log.debug(s"Document $url has contentType $contentType. Selected ${charset.value} charset for document $url")
+
                 Document.Strict(url, contentType.mediaType, charset, body)
 
             case _ =>
