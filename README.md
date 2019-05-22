@@ -1,16 +1,16 @@
-#web-crawler
+# web-crawler
 
 A very simple crawler of web-pages with domain filter written in Scala with power of Akka and with a small pinch of 
 Jsoup parsing.
 
-##Configuration
+## Configuration
 
 Application accepts configuration in HOCON format. Defined options are:
 * `app.request-state-timeout` - timeout for asking master state.
 * `crawler.master.dequeue-next-url-interval` - interval between attempts of dequeueing the crawling queue.
 * `crawler.storage.root-path` - folder where documents should be stored.
 
-##API
+## API
 
 * `GET /status` - shows info about crawling master state in JSON format. Example of response:
 ~~~~json
