@@ -1,16 +1,22 @@
 package crawler
 
 import akka.actor.{Actor, ActorLogging}
-import crawler.logic.extract.filter.{AllowedDomainsFilter, AllowedProtocolsFilter, UrlFilterChain}
+import crawler.logic.extract.filter.{AllowedDomainsFilter, AllowedProtocolsFilter, NotSameUrlFilter, UrlFilterChain}
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 import scala.language.postfixOps
 
-class CrawlMaster (workerFactory: WorkerFactory)
+class CrawlMaster(workerFactory: WorkerFactory,
+                  dequeueNextUrlInterval: FiniteDuration)
     extends Actor
     with ActorLogging {
 
     private val workers = workerFactory.createPool
+
+    override def preStart(): Unit = {
+        import context.dispatcher
+        context.system.scheduler.schedule(dequeueNextUrlInterval, dequeueNextUrlInterval, self, DequeueNextUrl)
+    }
 
     override def receive: Receive = withState(CrawlMasterState())
 
@@ -30,7 +36,6 @@ class CrawlMaster (workerFactory: WorkerFactory)
             log.debug(s"Enqueued $url")
 
             context.become(withState(state.enqueue(url)))
-            dequeueNextUrl(state) //подпинывает очередь
 
         case GetCrawlStatus =>
             val status = state.status
@@ -48,21 +53,9 @@ class CrawlMaster (workerFactory: WorkerFactory)
             log.info("Crawling resumed")
 
             context.become(withState(state.resume))
-            dequeueNextUrl(state)
 
         case DequeueNextUrl =>
             dequeueNextUrl(state)
-
-        case DocumentDownloaded(document) =>
-            log.debug(s"Got document ${document.url}")
-
-            val filter = UrlFilterChain(
-                AllowedDomainsFilter(state.allowedDomains),
-                AllowedProtocolsFilter("http", "https")
-            )
-
-            workers ! SaveDocument(document)
-            workers ! ExtractUrls(document, filter)
 
         case DocumentSaved(document, storageId) =>
             log.debug(s"Document ${document.url} saved in $storageId")
@@ -74,28 +67,26 @@ class CrawlMaster (workerFactory: WorkerFactory)
 
     }
 
-    private def scheduleNextUrl(): Unit = {
-        import context.dispatcher
-        //TODO from config
-        context.system.scheduler.scheduleOnce(100 milliseconds, self, DequeueNextUrl)
-    }
-
     private def dequeueNextUrl(state: CrawlMasterState): Unit = {
         if (!state.paused) {
             if (state.queue.nonEmpty) {
                 val (url, newState) = state.dequeueUrl
+                val filter = UrlFilterChain(
+                    AllowedDomainsFilter(state.allowedDomains),
+                    NotSameUrlFilter(state.processed),
+                    AllowedProtocolsFilter("http", "https")
+                )
 
                 log.debug(s"Crawling $url")
 
                 context.become(withState(newState))
-                workers ! DownloadDocument(url)
+                workers ! ProcessUrl(url, filter)
+
             } else {
                 log.debug("Received NextUrl while queue is empty")
             }
-
-            scheduleNextUrl()
         } else {
-            log.warning("Received NextUrl while paused")
+            log.debug("Received NextUrl while paused")
         }
     }
 

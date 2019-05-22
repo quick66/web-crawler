@@ -13,6 +13,9 @@ import crawler.{CrawlMaster, WorkerFactory}
 import javax.inject.{Named, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 
+import scala.concurrent.duration._
+import scala.util.Try
+
 class AppModule extends ScalaModule {
 
     @Provides @Singleton
@@ -21,15 +24,15 @@ class AppModule extends ScalaModule {
     @Provides @Singleton
     def actorSystem(appConfig: Config): ActorSystem = ActorSystem("web-crawler", appConfig)
 
-    @Provides @Singleton
-    def materializer(implicit system: ActorSystem): Materializer = ActorMaterializer()
-
-    @Provides @Singleton
-    def httpExt(implicit system: ActorSystem): HttpExt = Http()
-
     @Provides @Singleton @Named("crawl-master")
-    def crawlMaster(system: ActorSystem,
-                    workerFactory: WorkerFactory): ActorRef = system.actorOf(Props(new CrawlMaster(workerFactory)))
+    def crawlMaster(appConfig: Config,
+                    system: ActorSystem,
+                    workerFactory: WorkerFactory): ActorRef = {
+        val dequeueNextUrlInterval = Try {
+            appConfig.getDuration("crawler.master.dequeue-next-url-interval").toNanos.nanos
+        } getOrElse(100 milliseconds)
+        system.actorOf(Props(new CrawlMaster(workerFactory, dequeueNextUrlInterval)))
+    }
 
     override def configure(): Unit = {
         bind[UrlExtractor].to[JsoupUrlExtractor]

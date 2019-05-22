@@ -4,6 +4,8 @@ import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, OneForOneStrateg
 import akka.event.Logging
 import akka.pattern.pipe
 import akka.routing.RoundRobinPool
+import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.{ActorMaterializer, Materializer}
 import crawler.logic.download.DocumentDownloader
 import crawler.logic.extract.UrlExtractor
 import crawler.logic.storage.Storage
@@ -17,40 +19,28 @@ class CrawlWorker(downloader: DocumentDownloader,
 
     import context.dispatcher
 
+    private implicit val m: Materializer = ActorMaterializer()
+
     override def receive: Receive = {
-        case DownloadDocument(url) =>
-            log.debug(s"Downloading document $url")
+        case ProcessUrl(url, urlFilter) =>
+            val master = sender()
 
-            downloader.getContent(url)
-                .map { document =>
-                    log.info(s"Got document ${document.url}")
+            downloader.getContent(url).foreach { document =>
+                val store = storage.save(document)
+                    .mapMaterializedValue { storageId =>
+                        storageId.map(DocumentSaved(document, _)) pipeTo master
+                    }
 
-                    DocumentDownloaded(document)
-                }
-                .pipeTo(sender())
+                val extract = extractor.extract(document, urlFilter)
+                    .mapMaterializedValue { urls =>
+                        urls.map(UrlsExtracted(document, _)) pipeTo master
+                    }
 
-        case SaveDocument(document) =>
-            log.debug(s"Saving document ${document.url}")
-
-            storage.save(document)
-                .map { storageId =>
-                    log.info(s"Document ${document.url} saved in $storageId")
-
-                    DocumentSaved(document, storageId)
-                }
-                .pipeTo(sender())
-
-        case ExtractUrls(document, urlFilter) =>
-            log.debug(s"Extracting links from document ${document.url}")
-
-            extractor
-                .extract(document, urlFilter)
-                .map { urls =>
-                    log.info(s"Extracted ${urls.size} urls from document ${document.url}")
-
-                    UrlsExtracted(document, urls)
-                }
-                .pipeTo(sender())
+                document.contentStream
+                    .alsoToMat(store)(Keep.none)
+                    .alsoToMat(extract)(Keep.none)
+                    .runWith(Sink.ignore)
+            }
     }
 
 }
@@ -66,12 +56,11 @@ class WorkerFactory @Inject()(downloader: DocumentDownloader,
         val supervisorStrategy = {
             OneForOneStrategy() {
                 case e =>
-                    log.warning(s"Exception $e in router")
+                    log.error(s"Exception in worker", e)
                     SupervisorStrategy.Restart
             }
         }
 
-        //TODO from config
         val pool = RoundRobinPool(8)
             .withSupervisorStrategy(supervisorStrategy)
             .props(Props(new CrawlWorker(downloader, storage, extractor)))

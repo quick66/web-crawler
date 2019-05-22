@@ -19,11 +19,8 @@ case class CrawlingStatus(paused: Boolean, enqueued: Int, processed: Int)
 case class AllowedDomains(domains: Set[String])
 
 // Commands for worker
-case class DownloadDocument(url: URL)
-case class SaveDocument(document: Document)
-case class ExtractUrls(document: Document, urlFilter: UrlFilter)
+case class ProcessUrl(url: URL, urlFilter: UrlFilter)
 
 // Replies from worker
-case class DocumentDownloaded(document: Document)
 case class DocumentSaved(document: Document, strorageId: String)
 case class UrlsExtracted(document: Document, urls: Seq[URL])
