@@ -26,8 +26,7 @@ class JsoupUrlExtractor extends UrlExtractor {
             }
     }
 
-    private def extract(url: URL, content: ByteString, charset: Charset, urlFilter: UrlFilter)
-                       (implicit ec: ExecutionContext): Seq[URL] = {
+    private [extract] def extract(url: URL, content: ByteString, charset: Charset, urlFilter: UrlFilter): Seq[URL] = {
         Jsoup.parse(content.decodeString(charset))
             .getElementsByTag("a")
             .iterator().asScala

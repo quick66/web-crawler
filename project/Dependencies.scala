@@ -18,6 +18,11 @@ object Dependencies {
         "net.codingwell" %% "scala-guice" % "4.2.3",
 
         // Parsing
-        "org.jsoup" % "jsoup" % "1.12.1"
+        "org.jsoup" % "jsoup" % "1.12.1",
+
+        // Test
+
+        "org.scalatest" %% "scalatest" % "3.0.7" % "test"
     )
+
 }
