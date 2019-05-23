@@ -8,6 +8,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 trait DocumentDownloader {
 
+    /**
+      * Creates Document object with contained content stream
+      */
     def getContent(url: URL)(implicit ec: ExecutionContext): Future[Document]
 
 }

@@ -2,6 +2,13 @@ package crawler
 
 import java.net.URL
 
+/**
+  * Current state of crawler master with updates in immutable manner
+  * @param paused           is top items from the crawling queue currently processed
+  * @param queue            crawling queue
+  * @param processed        set of processed documents
+  * @param allowedDomains   domains, from which pages could be processed
+  */
 case class CrawlMasterState(paused: Boolean = false,
                             queue: Seq[URL] = Seq.empty,
                             processed: Set[URL] = Set.empty,

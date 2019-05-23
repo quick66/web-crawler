@@ -8,6 +8,7 @@ Jsoup parsing.
 Application accepts configuration in HOCON format. Defined options are:
 * `app.request-state-timeout` - timeout for asking master state.
 * `crawler.master.dequeue-next-url-interval` - interval between attempts of dequeueing the crawling queue.
+* `crawler.worker.count` - size of worker's pool.
 * `crawler.storage.root-path` - folder where documents should be stored.
 
 ## API

@@ -6,6 +6,7 @@ import akka.pattern.pipe
 import akka.routing.RoundRobinPool
 import akka.stream.scaladsl.{Keep, Sink}
 import akka.stream.{ActorMaterializer, Materializer}
+import com.typesafe.config.Config
 import crawler.logic.download.DocumentDownloader
 import crawler.logic.extract.UrlExtractor
 import crawler.logic.storage.Storage
@@ -46,9 +47,12 @@ class CrawlWorker(downloader: DocumentDownloader,
 }
 
 @Singleton
-class WorkerFactory @Inject()(downloader: DocumentDownloader,
+class WorkerFactory @Inject()(config: Config,
+                              downloader: DocumentDownloader,
                               storage: Storage,
                               extractor: UrlExtractor) {
+
+    private val workerCount = config.getInt("crawler.worker.count")
 
     def createPool(implicit context: ActorContext): ActorRef = {
         val log = Logging(context.system, "CrawlWorkerExceptions")
@@ -61,7 +65,7 @@ class WorkerFactory @Inject()(downloader: DocumentDownloader,
             }
         }
 
-        val pool = RoundRobinPool(8)
+        val pool = RoundRobinPool(workerCount)
             .withSupervisorStrategy(supervisorStrategy)
             .props(Props(new CrawlWorker(downloader, storage, extractor)))
 

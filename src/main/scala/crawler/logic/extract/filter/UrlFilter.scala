@@ -8,6 +8,9 @@ trait UrlFilter extends (URL => Boolean) {
 
 }
 
+/**
+  * filter out URLs that any provided filter filtered out
+  */
 class UrlFilterChain private (filters: Seq[UrlFilter]) extends UrlFilter {
 
     override def apply(url: URL): Boolean = filters.map(_(url)).reduce(_ && _)

@@ -11,6 +11,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 trait UrlExtractor {
 
+    /**
+      * Returns Sink with links extracted from document and applied url filter
+      */
     def extract(document: Document, urlFilter: UrlFilter)
                (implicit ec: ExecutionContext): Sink[ByteString, Future[Seq[URL]]]
 
